@@ -8,7 +8,8 @@ import src.Namelist_management.Duplicate as Duplicate
 import src.Run_JULES.Run_JULES as Run_JULES
 import src.Namelist_management.Edit_variable as Edit_variable
 
-def iterate_variabel(jules_executable_address,
+
+def iterate_variable(jules_executable_address,
                      master_namelist_address,
                      variable_name,
                      variable_namelist,
