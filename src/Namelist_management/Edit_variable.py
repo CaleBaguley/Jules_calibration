@@ -37,7 +37,7 @@ def edit_variable(file_address, namelist, variable, value):
         # Check if the variable is in the line
         elif variable in line:
             print("Variable found.")
-            lines[namelist_start_index+1 + i] = variable + " = " + value + "\n"
+            lines[namelist_start_index+1 + i] = variable + "=" + value + ",\n"
             break
     # If the variable was not found
     else:
