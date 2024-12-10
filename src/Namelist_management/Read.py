@@ -44,8 +44,7 @@ def read_namelist(file_address, namelist):
             namelist_end_index = namelist_start_index + i
             break
     else:
-        print("End of namelist not found.")
-        return []
+        namelist_end_index = len(lines)
 
     return lines[namelist_start_index:namelist_end_index]
 
@@ -63,4 +62,7 @@ def read_variable(file_address, namelist, variable):
 
     for line in namelist_lines:
         if variable in line:
-            return line.split("=")[1].strip()
+            return line.split("=")[1].strip()[:-1]
+    else:
+        print("Variable not found.")
+        return None
