@@ -7,6 +7,7 @@ from logging import exception
 import src.Namelist_management.Duplicate as Duplicate
 import src.Run_JULES.Run_JULES as Run_JULES
 import src.Namelist_management.Edit_variable as Edit_variable
+import src.Namelist_management.Read as Read
 
 
 def iterate_variable(jules_executable_address,
@@ -16,8 +17,9 @@ def iterate_variable(jules_executable_address,
                      variable_namelist_file,
                      variable_values,
                      output_folder,
-                     run_id = "",
-                     keep_dump_files = False):
+                     run_ids,
+                     keep_dump_files = False,
+                     overwrite_tmp_files = False):
 
     """
     Iterate over a series of values for a given variable
@@ -28,31 +30,54 @@ def iterate_variable(jules_executable_address,
     :param variable_namelist_file: Name of the namelist file containing the changing variable
     :param variable_values: Values of the variable to iterate over as a 1D list of strings.
     :param output_folder: Location of output folder
-    :param run_id: Identifier for the run. Prefixes variable name and value (str) (optional)
+    :param run_ids: List of identifiers for each run. Must be the same length as variable_values. (list of strings)
     :param keep_dump_files: If True, keeps the JULES dump files (bool) (optional)
     :return:
     """
 
     # Make coppy of the master namelist to edit
-    tmp_namelist = os.curdir + ("/tmp/namelist/")
-    Duplicate.duplicate(master_namelist_address, tmp_namelist, overwrite=True)
+    tmp_namelist = os.getcwd() + ("/tmp/namelist/")
+    Duplicate.duplicate(master_namelist_address, tmp_namelist, overwrite=overwrite_tmp_files)
 
     # Create a temporary output folder
-    tmp_output = os.curdir + "/tmp/output/"
+    tmp_output = os.getcwd() + "/tmp/output/"
     if(os.path.exists(tmp_output)):
-        exception("ERROR: temporary output folder already exists.\n"
-                  + "Please delete the folder and try again.\n"
-                  + tmp_output)
+        if overwrite_tmp_files:
+            # Walk through the directory and delete all files
+            for root, dirs, files in os.walk(tmp_output, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+            os.rmdir(tmp_output)
+        else:
+            exception("ERROR: temporary output folder already exists.\n"
+                      + "Please delete the folder or set overwrite_tmp_files = True.\n")
     os.mkdir(tmp_output)
 
     # Change the JULES output to a temporary folder
+    # Note we need to add ' to both ends of the output directory.
     Edit_variable.edit_variable(tmp_namelist + "output.nml",
                                 "jules_output",
                                 "output_dir",
-                                tmp_output)
+                                "'" + tmp_output + "'")
+
+    # Check the actual output folder exists
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Get the output profile name
+    profile_name = Read.read_variable(tmp_namelist + "output.nml",
+                                      "jules_output_profile",
+                                      "profile_name")
+
+    # Remove any quotes from the profile name
+    profile_name = profile_name.strip("'")
+    profile_name = profile_name.strip('"')
+
 
     # Iterate over the values
-    for value in variable_values:
+    for i, value in enumerate(variable_values):
 
         # Edit the variable
         Edit_variable.edit_variable(tmp_namelist + variable_namelist_file,
@@ -61,18 +86,19 @@ def iterate_variable(jules_executable_address,
                                     value)
 
         # Set the current run id
-        current_run_id = run_id + "_" + variable_name + "_" + value
+        current_run_id = run_ids[i]
+
         Edit_variable.edit_variable(tmp_namelist + "output.nml",
                                     "jules_output",
                                     "run_id",
-                                    current_run_id)
+                                    "'" + current_run_id + "'")
 
         # Run JULES
         Run_JULES.run_JULES(jules_executable_address, tmp_namelist)
 
         # Move the output from the temporary folder to the output folder
-        os.rename(tmp_output + current_run_id,
-                  output_folder + current_run_id)
+        os.rename(tmp_output + current_run_id + "." + profile_name + ".nc",
+                  output_folder + current_run_id + "." + profile_name + ".nc")
 
         # If user wants to keep dump files, move them to the output folder
         if keep_dump_files:
@@ -101,6 +127,6 @@ def iterate_variable(jules_executable_address,
     os.rmdir(tmp_namelist)
 
     # Remove tmp folder
-    os.rmdir(os.curdir + "/tmp")
+    os.rmdir(os.getcwd() + "/tmp")
 
     return
