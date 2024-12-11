@@ -78,20 +78,6 @@ def read_variable(file_address, namelist, variable):
     print("Variable not found.")
     return None
 
-
-def read_soil_file(file_address):
-    """
-    Reads the contents of a soil file
-    :param file_address: Address of the file (str)
-    :return: Contents of the file (list)
-    """
-
-    # Open the file
-    with open(file_address, "r") as file:
-        lines = file.readlines()
-
-    return lines
-
 def read_soil_variable_names(ancillary_nml_address):
     """
     Reads the names of the variables in a soil ancillary file
@@ -107,6 +93,27 @@ def read_soil_variable_names(ancillary_nml_address):
 
     # Split the string into a list of variable names
     return soil_variable_names.split(",")
+
+def read_soil_variable_values(file_address):
+
+    """
+    Reads the value of a variable in a soil file
+    :param file_address: Address of the soil ancillary file (str)
+    :return: Value of the variable (str)
+    """
+
+    lines = read_file(file_address)
+
+    # Check the file only has one line
+    if len(lines) != 1:
+        print("Soil file should only have one line.")
+        return None
+
+    # Remove the quotation marks at the ends and split the line into a list
+    line = lines[0][1:-1]
+    values = line.split(" ")
+
+    return values
 
 def read_soil_variable(file_address, variable, ancillary_nml_address):
     """
@@ -127,18 +134,8 @@ def read_soil_variable(file_address, variable, ancillary_nml_address):
         print("Variable not found.")
         return None
 
-    # Open the file
-    with open(file_address, "r") as file:
-        lines = file.readlines()
-
-    # Check the file only has one line
-    if len(lines) != 1:
-        print("Soil file should only have one line.")
-        return None
-
-    # Remove the quotation marks at the ends and split the line into a list
-    line = lines[0][1:-1]
-    line = line.split(" ")
+    # Get the content of the soil file
+    variables = read_soil_variable_values(file_address)
 
     # Return the value of the variable as a string
-    return line[variable_index]
+    return variables[variable_index]
