@@ -69,12 +69,12 @@ def duplicate_file(file_address, duplicate_address, overwrite=False):
     return True
 
 
-def duplicate_soil_ancillary(soil_ancillary_file, duplicate_address, ancillary_namelist, overwrite=False):
+def duplicate_soil_ancillary(soil_ancillary_file, duplicate_address, ancillary_namelist_file, overwrite=False):
     """
     Duplicates the soil ancillary files to the duplicate_address
     :param soil_ancillary_file: Soil ancillary files to duplicate (str)
     :param duplicate_address: Address to copy the soil ancillary files to (str)
-    :param ancillary_namelist: Namelist containing the soil ancillary file address (str)
+    :param ancillary_namelist_file: Address of the ancillary namelist file (str)
     :param overwrite = False: If True, overwrites the files in the duplicate_address (bool)
     :return: Address of the new soil ancillary file (str)
     """
@@ -89,7 +89,7 @@ def duplicate_soil_ancillary(soil_ancillary_file, duplicate_address, ancillary_n
     new_soil_file = duplicate_address + soil_ancillary_file.split("/")[-1]
 
     # Update the soil ancillary file address in the ancillary namelist
-    if not Edit_variable.edit_variable(ancillary_namelist,
+    if not Edit_variable.edit_variable(ancillary_namelist_file,
                                        "jules_soil_props",
                                        "file",
                                        new_soil_file):
