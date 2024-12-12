@@ -23,13 +23,13 @@ def iterate_variable(jules_executable_address,
 
     """
     Iterate over a series of values for a given variable
-    :param jules_executable_address: JULES executable address
-    :param master_namelist_address:  of the folder containing all the namelists
-    :param variable_name: Variable to change
-    :param variable_namelist: Name of the namelist containing the changing variable
-    :param variable_namelist_file: Name of the namelist file containing the changing variable
-    :param variable_values: Values of the variable to iterate over as a 1D list of strings.
-    :param output_folder: Location of output folder
+    :param jules_executable_address: JULES executable address (str)
+    :param master_namelist_address:  of the folder containing all the namelists to copy (str)
+    :param variable_name: Variable to change (str)
+    :param variable_namelist: Name of the namelist containing the changing variable (str)
+    :param variable_namelist_file: Name of the namelist file containing the changing variable (str)
+    :param variable_values: Values of the variable to iterate over as a 1D list of strings. (list of strings)
+    :param output_folder: Location of output folder (str)
     :param run_ids: List of identifiers for each run. Must be the same length as variable_values. (list of strings)
     :param keep_dump_files: If True, keeps the JULES dump files (bool) (optional)
     :return:
