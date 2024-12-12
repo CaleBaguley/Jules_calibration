@@ -6,12 +6,19 @@ Code to open a namelist file and edit a single input variable
 def edit_variable(file_address, namelist, variable, value):
     """
     Edits the value of a variable in a namelist file
-    :param file_address: Address of the file (str)
-    :param namelist: Namelist to edit (str)
-    :param variable: Variable to edit (str)
-    :param value: Value to set the variable to (str)
+    :param file_address: Address of the file (str) or list of addresses (list of str)
+    :param namelist: Namelist to edit (str) or list of namelists to edit (list of str)
+    :param variable: Variable to edit (str) or list of variables to edit (list of str)
+    :param value: Value to set the variable to (str) or list of values to set the variables to (list of str)
     :return: True if the variable was edited, False otherwise
     """
+
+    # If multiple variables are to be edited
+    if type(file_address) == list:
+        for i in range(len(file_address)):
+            if not edit_variable(file_address[i], namelist[i], variable[i], value[i]):
+                return False
+        return True
 
     # Open the file
     with open(file_address, "r") as file:
