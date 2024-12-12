@@ -2,6 +2,7 @@
 Code to run JULES using a series of values for a given variable
 """
 import os
+import datetime
 from logging import exception
 
 import src.Namelist_management.Duplicate as Duplicate
@@ -90,9 +91,23 @@ def iterate_variables(jules_executable_address,
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
 
+    # Create a file to store run information
+    with open(output_folder + "run_info.csv", "w") as run_info:
+        # write header
+        header = "run_id,run_date," + ",".join(variable_names) + "\n"
+        run_info.write(header)
 
     # Iterate over the values
     for i, values in enumerate(variable_values):
+
+        # Set the current run id
+        current_run_id = run_id_prefix + f"_{i}"
+
+        # Write the run info to the run_info.csv file
+        with open(output_folder + "run_info.csv", "a") as run_info:
+            run_info.write(current_run_id + "." + profile_name + ".nc,"
+                           + f"{datetime.datetime.now():%Y-%m-%d %H:%M},"
+                           + ",".join(values) + "\n")
 
         # Edit the variable
         Edit_variable.edit_variable(variable_namelist_files_full,
@@ -100,8 +115,7 @@ def iterate_variables(jules_executable_address,
                                     variable_names,
                                     values)
 
-        # Set the current run id
-        current_run_id = run_id_prefix + f"_{i}"
+
 
         Edit_variable.edit_variable(tmp_namelist + "output.nml",
                                     "jules_output",
