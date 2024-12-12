@@ -109,9 +109,8 @@ def read_soil_variable_values(file_address):
         print("Soil file should only have one line.")
         return None
 
-    # Remove the quotation marks at the ends and split the line into a list
-    line = lines[0][1:-1]
-    values = line.split(" ")
+    # Split the line into a list
+    values = lines[0].split(" ")
 
     return values
 
