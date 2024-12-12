@@ -36,6 +36,7 @@ def iterate_variable(jules_executable_address,
     """
 
     # Make coppy of the master namelist to edit
+    tmp_folder = os.getcwd() + "/tmp/"
     tmp_namelist = os.getcwd() + ("/tmp/namelist/")
     Duplicate.duplicate(master_namelist_address, tmp_namelist, overwrite=overwrite_tmp_files)
 
@@ -117,17 +118,13 @@ def iterate_variable(jules_executable_address,
         for file in output_files:
             os.remove(tmp_output + file)
 
-    # Delete the temporary output folder
-    os.rmdir(tmp_output)
-
-    # Delete the temporary namelist folder
-    output_files = os.listdir(tmp_namelist)
-    for file in output_files:
-        os.remove(tmp_namelist + file)
-    os.rmdir(tmp_namelist)
-
-    # Remove tmp folder
-    os.rmdir(os.getcwd() + "/tmp")
+    # Remove tmp folder and contents
+    for root, dirs, files in os.walk(tmp_folder, topdown=False):
+        for name in files:
+            os.remove(os.path.join(root, name))
+        for name in dirs:
+            os.rmdir(os.path.join(root, name))
+    os.rmdir(tmp_folder)
 
     return
 
@@ -156,11 +153,15 @@ def iterate_soil_variable(jules_executable_address,
     """
 
     # Make a coppy of the master namelist to edit
-    tmp_namelist = os.getcwd() + ("/tmp/namelist/")
+    tmp_folder = os.getcwd() + "/tmp/"
+    tmp_namelist = os.getcwd() + "/tmp/namelist/"
     Duplicate.duplicate(master_namelist_address, tmp_namelist, overwrite=overwrite_tmp_files)
 
     # Make a copy of the soil ancillary file
-    Duplicate.
+    tmp_soil_file = Duplicate.duplicate_soil_ancillary(soil_ancillary_address,
+                                                       tmp_folder,
+                                                       tmp_namelist + "ancillaries.nml",
+                                                       overwrite=overwrite_tmp_files)
 
     # Create a temporary output folder
     tmp_output = os.getcwd() + "/tmp/output/"
@@ -185,7 +186,7 @@ def iterate_soil_variable(jules_executable_address,
                                 "output_dir",
                                 "'" + tmp_output + "'")
 
-    # Check the actual output folder exists
+    # Make the actual output folder if it doesn't exist
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -202,10 +203,10 @@ def iterate_soil_variable(jules_executable_address,
     for i, value in enumerate(variable_values):
 
         # Edit the variable
-        Edit_variable.edit_variable(tmp_namelist + variable_namelist_file,
-                                    variable_namelist,
-                                    variable_name,
-                                    value)
+        Edit_variable.edit_soil_variable(tmp_soil_file,
+                                         variable_name,
+                                         value,
+                                         tmp_namelist + "ancillaries.nml")
 
         # Set the current run id
         current_run_id = run_ids[i]
@@ -239,14 +240,12 @@ def iterate_soil_variable(jules_executable_address,
         for file in output_files:
             os.remove(tmp_output + file)
 
-    # Delete the temporary output folder
-    os.rmdir(tmp_output)
+    # Remove tmp folder and contents
+    for root, dirs, files in os.walk(tmp_folder, topdown=False):
+        for name in files:
+            os.remove(os.path.join(root, name))
+        for name in dirs:
+            os.rmdir(os.path.join(root, name))
+    os.rmdir(tmp_folder)
 
-    # Delete the temporary namelist folder
-    output_files = os.listdir(tmp_namelist)
-    for file in output_files:
-        os.remove(tmp_namelist + file)
-    os.rmdir(tmp_namelist)
-
-    # Remove tmp folder
-    os.rmdir(os.getcwd() + "/tmp")
+    return
