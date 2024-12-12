@@ -92,7 +92,7 @@ def duplicate_soil_ancillary(soil_ancillary_file, duplicate_address, ancillary_n
     if not Edit_variable.edit_variable(ancillary_namelist_file,
                                        "jules_soil_props",
                                        "file",
-                                       new_soil_file):
+                                       "'" + new_soil_file + "'"):
         return False
 
     return new_soil_file
