@@ -10,30 +10,41 @@ import src.Namelist_management.Edit_variable as Edit_variable
 import src.Namelist_management.Read as Read
 
 
-def iterate_variable(jules_executable_address,
-                     master_namelist_address,
-                     variable_name,
-                     variable_namelist,
-                     variable_namelist_file,
-                     variable_values,
-                     output_folder,
-                     run_ids,
-                     keep_dump_files = False,
-                     overwrite_tmp_files = False):
+def iterate_variables(jules_executable_address,
+                      master_namelist_address,
+                      variable_names,
+                      variable_namelists,
+                      variable_namelist_files,
+                      variable_values,
+                      output_folder,
+                      run_id_prefix,
+                      keep_dump_files = False,
+                      overwrite_tmp_files = False):
 
     """
     Iterate over a series of values for a given variable
     :param jules_executable_address: JULES executable address (str)
     :param master_namelist_address:  of the folder containing all the namelists to copy (str)
-    :param variable_name: Variable to change (str)
-    :param variable_namelist: Name of the namelist containing the changing variable (str)
-    :param variable_namelist_file: Name of the namelist file containing the changing variable (str)
-    :param variable_values: Values of the variable to iterate over as a 1D list of strings. (list of strings)
+    :param variable_names: Variable to change (str)
+        or list of variables to change (list of str)
+    :param variable_namelists: Name of the namelist containing the changing variable (str)
+        or list of namelists (list of str)
+    :param variable_namelist_files: Name of the namelist file containing the changing variable (str)
+        or list of namelist files (list of str)
+    :param variable_values: Values of the variable to iterate over as a 1D list of strings (list of strings)
+        or lait of lists containing each set of variable values to try (list of lists of str)
     :param output_folder: Location of output folder (str)
-    :param run_ids: List of identifiers for each run. Must be the same length as variable_values. (list of strings)
+    :param run_id_prefix: Prefix for all run ids (str)
     :param keep_dump_files: If True, keeps the JULES dump files (bool) (optional)
     :return:
     """
+
+    # Manage the case where the user only wants to iterate over one variable
+    if type(variable_names) is str:
+        variable_names = [variable_names]
+        variable_namelists = [variable_namelists]
+        variable_namelist_files = [variable_namelist_files]
+        variable_values = [variable_values]
 
     # Make coppy of the master namelist to edit
     tmp_folder = os.getcwd() + "/tmp/"
@@ -55,6 +66,9 @@ def iterate_variable(jules_executable_address,
             exception("ERROR: temporary output folder already exists.\n"
                       + "Please delete the folder or set overwrite_tmp_files = True.\n")
     os.mkdir(tmp_output)
+
+    # Create a list of the full file paths for the namelists to change
+    variable_namelist_files_full = [tmp_namelist + file for file in variable_namelist_files]
 
     # Change the JULES output to a temporary folder
     # Note we need to add ' to both ends of the output directory.
@@ -78,16 +92,16 @@ def iterate_variable(jules_executable_address,
 
 
     # Iterate over the values
-    for i, value in enumerate(variable_values):
+    for i, values in enumerate(variable_values):
 
         # Edit the variable
-        Edit_variable.edit_variable(tmp_namelist + variable_namelist_file,
-                                    variable_namelist,
-                                    variable_name,
-                                    value)
+        Edit_variable.edit_variable(variable_namelist_files_full,
+                                    variable_namelists,
+                                    variable_names,
+                                    values)
 
         # Set the current run id
-        current_run_id = run_ids[i]
+        current_run_id = run_id_prefix + f"_{i}"
 
         Edit_variable.edit_variable(tmp_namelist + "output.nml",
                                     "jules_output",
