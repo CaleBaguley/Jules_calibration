@@ -51,31 +51,40 @@ def edit_variable(file_address, namelist, variable, value):
 
     return True
 
-def edit_soil_variable(file_address, variable, new_value, ancillary_file):
+def edit_soil_variable(file_address, variables, new_values, ancillary_file):
     """
     Edits the value of a variable in a soil file
     :param file_address: Address of the file (str)
-    :param variable: Variable to edit (str)
-    :param new_value: Value to set the variable to (str)
+    :param variables: Variable to edit (str) or list of variables to edit (list of str)
+    :param new_value: Value to set the variable to (str) or list of values to set the variables to (list of str)
     :return: True if the variable was edited, False otherwise
     """
 
-    # Get the soil variable names
+    # If the variable is a string convert to a list
+    if type(variables) == str:
+        variables = [variables]
+        new_values = [new_values]
+
+    # Get all the soil variable names
     soil_variables = Read.read_soil_variable_names(ancillary_file)
 
-    # Check if the variable is in the soil file
-    if variable not in soil_variables:
-        print("Variable not found.")
-        return False
+    # Check if each variable is in the soil file
+    for variable in variables:
+        if variable not in soil_variables:
+            print(f"Variable, {variable}, not found in {ancillary_file}, $jules_soil_props.")
+            return False
 
     # Get the position of the variable to change
-    variable_index = soil_variables.index(variable)
+    variable_indecies = []
+    for variable in variables:
+        variable_indecies.append(soil_variables.index(variable))
 
-    # Get the soil variables
+    # Get the values soil variables
     soil_values = Read.read_soil_variable_values(file_address)
 
-    # Change the value
-    soil_values[variable_index] = new_value
+    # Change the values
+    for i in range(len(variable_indecies)):
+        soil_values[variable_indecies[i]] = new_values[i]
 
     # Write the changes to the file
     write_soil_variables(file_address, soil_values)
