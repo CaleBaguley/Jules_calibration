@@ -73,7 +73,10 @@ def read_variable(file_address, namelist, variable):
                     value += namelist_lines[j].strip()
                 else:
                     # Return the value without the comma at the end
-                    return value[:-1]
+                    if(value[-1] == ','):
+                        return value[:-1]
+                    # The last line doesn't have a comma at the end
+                    return value
 
     print("Variable not found.")
     return None
