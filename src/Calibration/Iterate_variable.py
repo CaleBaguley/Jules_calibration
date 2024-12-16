@@ -20,7 +20,8 @@ def iterate_variables(jules_executable_address,
                       output_folder,
                       run_id_prefix,
                       keep_dump_files = False,
-                      overwrite_tmp_files = False):
+                      overwrite_tmp_files = False,
+                      append_to_run_info = False):
 
     """
     Iterate over a series of values for a given variable
@@ -37,6 +38,8 @@ def iterate_variables(jules_executable_address,
     :param output_folder: Location of output folder (str)
     :param run_id_prefix: Prefix for all run ids (str)
     :param keep_dump_files: If True, keeps the JULES dump files (bool) (optional)
+    :param overwrite_tmp_files: If True, overwrites any existing tmp files (bool) (optional)
+    :param append_to_run_info: If True, appends to any existing run_info.csv file (bool) (optional)
     :return:
     """
 
@@ -91,17 +94,35 @@ def iterate_variables(jules_executable_address,
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
 
-    # Create a file to store run information
-    with open(output_folder + "run_info.csv", "w") as run_info:
-        # write header
+    # Manage file to store run metadata
+    if os.path.exists(output_folder + "run_info.csv") and append_to_run_info:
+
+        # Check the file has the correct header
         header = "run_id,run_date," + ",".join(variable_names) + "\n"
-        run_info.write(header)
+
+        with open(output_folder + "run_info.csv", "r") as run_info:
+            if run_info.readline() != header:
+                exception("ERROR: run_info.csv file already exists but has the wrong header.")
+
+        print("run_info.csv file already exists, appending data.")
+
+    elif os.path.exists(output_folder + "run_info.csv") and not append_to_run_info:
+        exception("ERROR: run_info.csv file already exists.\n"
+                  + "Please delete the file or set append_to_run_info = True.\n")
+    else:
+        print("Creating run_info.csv file")
+        with (open(output_folder + "run_info.csv", "w") as run_info):
+            # write header
+            header = "run_id,run_date"
+            header += "," + ",".join(variable_names)
+            header += "\n"
+            run_info.write(header)
 
     # Iterate over the values
     for i, values in enumerate(variable_values):
 
         # Set the current run id
-        current_run_id = run_id_prefix + f"_{i}"
+        current_run_id = run_id_prefix + f"_{datetime.datetime.now():%Y_%m_%d_%H_%M}"
 
         # Write the run info to the run_info.csv file
         with open(output_folder + "run_info.csv", "a") as run_info:
@@ -168,7 +189,8 @@ def iterate_soil_variable(jules_executable_address,
                           output_folder,
                           run_id_prefix,
                           keep_dump_files = False,
-                          overwrite_tmp_files = False):
+                          overwrite_tmp_files = False,
+                          append_to_run_info = False):
 
     """
     Iterate over a series of values for a given soil variable
@@ -197,6 +219,7 @@ def iterate_soil_variable(jules_executable_address,
     :param run_id_prefix: Prefix for all run ids (str)
     :param keep_dump_files: save JULES dumpfiles (bool)
     :param overwrite_tmp_files: overwrite any existing tmp files (bool)
+    :param append_to_run_info: append to any existing run_info.csv file (bool)
     :return:
     """
 
@@ -279,17 +302,37 @@ def iterate_soil_variable(jules_executable_address,
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
 
-    # Create a file to store run information
-    print("Creating run_info.csv file")
-    with (open(output_folder + "run_info.csv", "w") as run_info):
-        # write header
+    # Manage file to store run metadata
+    if os.path.exists(output_folder + "run_info.csv") and append_to_run_info:
+
+        # Check the file has the correct header
         header = "run_id,run_date"
         if len(variable_names) > 0:
             header += "," + ",".join(variable_names)
         if len(soil_variable_names) > 0:
             header += "," + ",".join(soil_variable_names)
         header += "\n"
-        run_info.write(header)
+
+        with open(output_folder + "run_info.csv", "r") as run_info:
+            if run_info.readline() != header:
+                exception("ERROR: run_info.csv file already exists but has the wrong header.\n")
+
+        print("run_info.csv file already exists, appending data.")
+
+    elif os.path.exists(output_folder + "run_info.csv") and not append_to_run_info:
+        exception("ERROR: run_info.csv file already exists.\n"
+                  + "Please delete the file or set append_to_run_info = True.\n")
+    else:
+        print("Creating run_info.csv file")
+        with (open(output_folder + "run_info.csv", "w") as run_info):
+            # write header
+            header = "run_id,run_date"
+            if len(variable_names) > 0:
+                header += "," + ",".join(variable_names)
+            if len(soil_variable_names) > 0:
+                header += "," + ",".join(soil_variable_names)
+            header += "\n"
+            run_info.write(header)
 
     # Set up variables to hold the current variable values
     current_JULES_variable_values = []
@@ -302,7 +345,7 @@ def iterate_soil_variable(jules_executable_address,
     for i in range(n_iterations):
 
         # Set the current run id
-        current_run_id = run_id_prefix + f"_{i}"
+        current_run_id = run_id_prefix + f"_{datetime.datetime.now():%Y_%m_%d+%H_%M}"
 
         print(f"-- Running iteration {i} with run_id {current_run_id} --")
 
