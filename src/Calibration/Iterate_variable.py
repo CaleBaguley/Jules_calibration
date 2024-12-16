@@ -159,10 +159,14 @@ def iterate_variables(jules_executable_address,
 def iterate_soil_variable(jules_executable_address,
                           master_namelist_address,
                           soil_ancillary_address,
-                          variable_name,
+                          variable_names,
+                          variable_namelists,
+                          variable_namelist_files,
                           variable_values,
+                          soil_variable_names,
+                          soil_variable_values,
                           output_folder,
-                          run_ids,
+                          run_id_prefix,
                           keep_dump_files = False,
                           overwrite_tmp_files = False):
 
@@ -171,14 +175,62 @@ def iterate_soil_variable(jules_executable_address,
     :param jules_executable_address: file address of the JULES executable (str)
     :param master_namelist_address: folder containing the namelists to copy (str)
     :param soil_ancillary_address: soil ancillary file to use (str)
-    :param variable_name: variable to iterate over (str)
-    :param variable_values: values to iterate over (list of str)
+    :param variable_names: Variable to change (str)
+        or list of variables to change (list of str)
+        or none if no variable is to be changed (None)
+    :param variable_namelists: Name of the namelist containing the changing variable (str)
+        or list of namelists (list of str)
+        or none if no variable is to be changed (None)
+    :param variable_namelist_files: Name of the namelist file containing the changing variable (str)
+        or list of namelist files (list of str)
+        or none if no variable is to be changed (None)
+    :param variable_values: Values of the variable to iterate over as a 1D list of strings (list of strings)
+        or lait of lists containing each set of variable values to try (list of lists of str)
+        or none if no variable is to be changed (None)
+    :param soil_variable_name: soil variable to iterate over (str)
+        or list of soil variables to iterate over (list of str)
+        or none if no soil variable is to be changed (None)
+    :param soil_variable_values: soil variable values to iterate over (list of str)
+        or list of lists of soil variable values to iterate over (list of lists of str)
+        or none if no soil variable is to be changed (None)
     :param output_folder: JULES output folder (str)
-    :param run_ids: name of each run (list of str)
+    :param run_id_prefix: Prefix for all run ids (str)
     :param keep_dump_files: save JULES dumpfiles (bool)
     :param overwrite_tmp_files: overwrite any existing tmp files (bool)
     :return:
     """
+
+    # Check there are variables to iterate over
+    if variable_values is None and soil_variable_values is None:
+        exception("ERROR: No variables to iterate over.\n")
+
+    # Manage JULES variables input options
+    # If no variable is to be changed, set the variables to empty lists
+    if variable_names is None:
+        variable_names = []
+        variable_namelists = []
+        variable_namelist_files = []
+        variable_values = []
+    # If only one variable is to be changed, set the variables to lists
+    elif type(variable_names) is str:
+        variable_names = [variable_names]
+        variable_namelists = [variable_namelists]
+        variable_namelist_files = [variable_namelist_files]
+        variable_values = [variable_values]
+
+    # Manage soil variables input options
+    # If no soil variable is to be changed, set the variables to empty lists
+    if soil_variable_names is None:
+        soil_variable_names = []
+        soil_variable_values = []
+    # If only one soil variable is to be changed, set the variables to lists
+    elif type(soil_variable_names) is str:
+        soil_variable_names = [soil_variable_names]
+        soil_variable_values = [soil_variable_values]
+
+    # Check the number of iterations is the same for both variables
+    if len(variable_values) != len(soil_variable_values) and len(variable_values) > 0 and len(soil_variable_values) > 0:
+        exception("ERROR: The number of iterations for the JULES variables and soil variables must be the same.\n")
 
     # Make a coppy of the master namelist to edit
     tmp_folder = os.getcwd() + "/tmp/"
@@ -227,18 +279,65 @@ def iterate_soil_variable(jules_executable_address,
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
 
-    # Iterate over the values
-    for i, value in enumerate(variable_values):
+    # Create a file to store run information
+    print("Creating run_info.csv file")
+    with (open(output_folder + "run_info.csv", "w") as run_info):
+        # write header
+        header = "run_id,run_date"
+        if len(variable_names) > 0:
+            header += "," + ",".join(variable_names)
+        if len(soil_variable_names) > 0:
+            header += "," + ",".join(soil_variable_names)
+        header += "\n"
+        run_info.write(header)
 
-        # Edit the variable
+    # Set up variables to hold the current variable values
+    current_JULES_variable_values = []
+    current_soil_variable_values = []
+
+    # Calculate the number of iterations
+    n_iterations = max(len(variable_values), len(soil_variable_values))
+
+    # Iterate over the values
+    for i in range(n_iterations):
+
+        # Set the current run id
+        current_run_id = run_id_prefix + f"_{i}"
+
+        print(f"-- Running iteration {i} with run_id {current_run_id} --")
+
+        # Get the variable values for the current iteration
+        if(len(variable_values) > 0):
+            current_JULES_variable_values = variable_values[i]
+        if(len(soil_variable_values) > 0):
+            current_soil_variable_values = soil_variable_values[i]
+
+        # Write the run info to the run_info.csv file
+        with open(output_folder + "run_info.csv", "a") as run_info:
+            out_string = current_run_id + "." + profile_name + ".nc," + f"{datetime.datetime.now():%Y-%m-%d %H:%M}"
+            if len(variable_names) > 0:
+                out_string += "," + ",".join(current_JULES_variable_values)
+            if len(soil_variable_names) > 0:
+                out_string += "," + ",".join(current_soil_variable_values)
+            out_string += "\n"
+            run_info.write(out_string)
+
+        # Edit JULES variables
+        Edit_variable.edit_variable(variable_namelist_files,
+                                    variable_namelists,
+                                    variable_names,
+                                    current_JULES_variable_values)
+
+        # Edit soil variables
         Edit_variable.edit_soil_variable(tmp_soil_file,
-                                         variable_name,
-                                         value,
+                                         soil_variable_names,
+                                         current_soil_variable_values,
                                          tmp_namelist + "ancillaries.nml")
 
         # Set the current run id
-        current_run_id = run_ids[i]
+        current_run_id = run_id_prefix + f"_{i}"
 
+        # Edit the output file name
         Edit_variable.edit_variable(tmp_namelist + "output.nml",
                                     "jules_output",
                                     "run_id",
