@@ -345,7 +345,7 @@ def iterate_soil_variable(jules_executable_address,
     for i in range(n_iterations):
 
         # Set the current run id
-        current_run_id = run_id_prefix + f"_{datetime.datetime.now():%Y_%m_%d+%H_%M}"
+        current_run_id = run_id_prefix + f"_{datetime.datetime.now():%Y_%m_%d_%H_%M}"
 
         print(f"-- Running iteration {i} with run_id {current_run_id} --")
 
