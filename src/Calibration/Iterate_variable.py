@@ -103,6 +103,7 @@ def iterate_variables(jules_executable_address,
         with open(output_folder + "run_info.csv", "r") as run_info:
             if run_info.readline() != header:
                 exception("ERROR: run_info.csv file already exists but has the wrong header.")
+                return None
 
         print("run_info.csv file already exists, appending data.")
 
@@ -253,7 +254,8 @@ def iterate_soil_variable(jules_executable_address,
 
     # Check the number of iterations is the same for both variables
     if len(variable_values) != len(soil_variable_values) and len(variable_values) > 0 and len(soil_variable_values) > 0:
-        exception("ERROR: The number of iterations for the JULES variables and soil variables must be the same.\n")
+        exception(f"ERROR: The number of iterations for the JULES variables ({len(variable_values)})"
+                  + f" and soil variables ({len(soil_variable_values)}) must be the same.\n")
 
     # Make a coppy of the master namelist to edit
     tmp_folder = os.getcwd() + "/tmp/"
@@ -316,6 +318,7 @@ def iterate_soil_variable(jules_executable_address,
         with open(output_folder + "run_info.csv", "r") as run_info:
             if run_info.readline() != header:
                 exception("ERROR: run_info.csv file already exists but has the wrong header.\n")
+                return None
 
         print("run_info.csv file already exists, appending data.")
 
@@ -376,9 +379,6 @@ def iterate_soil_variable(jules_executable_address,
                                          soil_variable_names,
                                          current_soil_variable_values,
                                          tmp_namelist + "ancillaries.nml")
-
-        # Set the current run id
-        current_run_id = run_id_prefix + f"_{i}"
 
         # Edit the output file name
         Edit_variable.edit_variable(tmp_namelist + "output.nml",
