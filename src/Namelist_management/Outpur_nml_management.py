@@ -24,21 +24,20 @@ def is_in_output(variable, output_namelist_file):
             break
     else:
         exception("ERROR: Output variable names not found in the output namelist file.\n")
+        exit()
 
     # loop over each variable to check
     for var in variable:
         # Loop over the lines to check if the variable is in the output namelist
-        for line in namelist_contents[line_num:]:
+        for i, line in enumerate(namelist_contents[line_num:]):
 
             # If the first entry is not ' then the list of variables has ended
-            if "'" != line[0]:
+            if "'" != line[0] and i != 0:
                 return False
 
             # Check if the variable is in the line
             elif var in line:
                 break
-
-        # If the variable was not found
         else:
             return False
 
