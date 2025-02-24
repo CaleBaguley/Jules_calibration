@@ -6,9 +6,12 @@ from src.Calibration.setup_calibration_files import setup_tmp_folders
 from src.general.file_management import make_folder
 from src.Namelist_management.Read import read_variable
 from src.Namelist_management.Outpur_nml_management import is_in_output
+from src.Namelist_management.Edit_variable import edit_variable
 
 from xarray import open_dataset
+from pandas import read_csv
 from logging import exception
+from copy import copy
 
 
 def optimise_variable(jules_executable_address,
@@ -20,6 +23,7 @@ def optimise_variable(jules_executable_address,
                       obs_variable_keys,
                       jules_out_variable_keys,
                       run_id_prefix,
+                      variable_initial_values = None,
                       variable_limits = None,
                       output_folder = None,
                       keep_dump_files = False,
@@ -51,18 +55,56 @@ def optimise_variable(jules_executable_address,
     """
 
     # -- Setup ---------------------------------------------------------------------------------
+
     # Manage the case where the user only wants to iterate over one variable
     if type(variable_names) is str:
         variable_names = [variable_names]
         variable_namelists = [variable_namelists]
         variable_namelist_files = [variable_namelist_files]
 
+    # Check the variable info is the same length
+    if len(variable_names) != len(variable_namelists) or len(variable_names) != len(variable_namelist_files):
+        exception("ERROR: variable_names, variable_namelists and variable_namelist_files must be the same length.")
+
+    # Manage the case where the user only wants to iterate over one observation variable and JULES output variable
+    if(type(obs_variable_keys) is str):
+        obs_variable_keys = [obs_variable_keys]
+    if(type(jules_out_variable_keys) is str):
+        jules_out_variable_keys = [jules_out_variable_keys]
+
+    # Check the observation variables and JULES output variables are the same length
+    if len(obs_variable_keys) != len(jules_out_variable_keys):
+        exception("ERROR: obs_variable_keys and jules_out_variable_keys must be the same length.")
+
     # Set up the temporary folders
     tmp_folder = setup_tmp_folders(master_namelist_address,
                                    tmp_folder,
                                    overwrite_tmp_files)
 
+    # Create list of the full file addresses for the variable namelist files
     variable_namelist_files_full = [tmp_folder + "namelist/" + file for file in variable_namelist_files]
+
+    # Set the initial values of the variables
+    if variable_initial_values is not None:
+        for i, val in enumerate(variable_initial_values):
+            edit_variable(variable_namelist_files_full[i],
+                          variable_namelists[i],
+                          variable_names[i],
+                          val)
+    # Read the initial values of the variables if not provided
+    else:
+        variable_initial_values = []
+        for i, name in enumerate(variable_names):
+            variable_initial_values.append(read_variable(variable_namelist_files_full[i],
+                                                         variable_namelists[i],
+                                                         variable_names[i]))
+
+    print(f"Initial values:")
+    for i, name in enumerate(variable_names):
+        print(f"{name} = {variable_initial_values[i]}")
+
+    # Set up variable to hold the current values when iterating
+    current_variable_values = copy(variable_initial_values)
 
     # Setup output folder
     if output_folder is not None:
@@ -90,8 +132,9 @@ def optimise_variable(jules_executable_address,
                   + str(jules_out_variable_keys)
                   + ") are not in the output namelist.")
 
-    # Read in observation data
-    obs_data = open_dataset(observation_data_address)
+    # Read in observation data and reduce to the required variables
+    obs_data = read_csv(observation_data_address)
+    obs_data = obs_data[obs_variable_keys]
 
     # -- Optimisation --------------------------------------------------------------------------
 
