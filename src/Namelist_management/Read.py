@@ -2,12 +2,19 @@
 Code to read a namelist file or individual namelist or namelist variable
 """
 
+from os.path import isfile
+from logging import exception
+
 def read_file(file_address):
     """
     Reads the contents of a namelist file
     :param file_address: Address of the file (str)
     :return: Contents of the file (list)
     """
+
+    # Check if the file exists
+    if not isfile(file_address):
+        exception(f"ERROR: {file_address} file not found.\n")
 
     # Open the file
     with open(file_address, "r") as file:
