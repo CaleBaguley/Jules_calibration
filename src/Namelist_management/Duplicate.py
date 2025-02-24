@@ -1,6 +1,7 @@
 import os
 
 from src.Namelist_management import Edit_variable as Edit_variable
+from src.general.file_management import make_folder
 
 """
 Contains code used to duplicate the contents of a folder containing namelist files
@@ -16,14 +17,8 @@ def duplicate(namelist_folder, duplicate_address, overwrite=False):
     :return: True if the files were copied, False otherwise
     """
 
-    if not os.path.exists(duplicate_address):
-        print("Creating directory: ", duplicate_address)
-        os.makedirs(duplicate_address)
-
-    # Already contains files?
-    if os.listdir(duplicate_address) and not overwrite:
-        print("Directory already contains files. Use overite = True to overwrite.")
-        return False
+    # Create the duplicate folder
+    make_folder(duplicate_address, overwrite)
 
     # Copy files
     print("Copying files...")
@@ -31,12 +26,9 @@ def duplicate(namelist_folder, duplicate_address, overwrite=False):
         if file.endswith(".nml"):
             print("Copying file: ", file)
 
-            # Need to replace spaces with "\ " for the terminal to understand the path
-            file_to_copy = (namelist_folder + file).replace(" ", "\ ")
-            duplicate_address_terminal = duplicate_address.replace(" ", "\ ")
-
-            # Copy the file using cp terminal command
-            os.system("cp " + file_to_copy + " " + duplicate_address_terminal)
+            duplicate_file(namelist_folder + file,
+                           duplicate_address,
+                           overwrite)
 
     return True
 
