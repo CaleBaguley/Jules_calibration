@@ -15,7 +15,6 @@ def make_folder(new_folder,
     :return: new_folder address (str)
     """
 
-    new_folder = os.getcwd() + "/tmp/output/"
     if(os.path.exists(new_folder)):
         if overwrite_existing:
             # Walk through the directory and delete all files
