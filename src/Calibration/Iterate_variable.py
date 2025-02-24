@@ -9,7 +9,8 @@ import src.Namelist_management.Duplicate as Duplicate
 import src.Run_JULES.Run_JULES as Run_JULES
 import src.Namelist_management.Edit_variable as Edit_variable
 import src.Namelist_management.Read as Read
-
+from src.general.file_management import make_folder
+from src.Calibration.setup_calibration_files import setup_calibration_run_folders
 
 def iterate_variables(jules_executable_address,
                       master_namelist_address,
@@ -20,6 +21,7 @@ def iterate_variables(jules_executable_address,
                       output_folder,
                       run_id_prefix,
                       keep_dump_files = False,
+                      tmp_folder = None,
                       overwrite_tmp_files = False,
                       append_to_run_info = False):
 
@@ -38,6 +40,7 @@ def iterate_variables(jules_executable_address,
     :param output_folder: Location of output folder (str)
     :param run_id_prefix: Prefix for all run ids (str)
     :param keep_dump_files: If True, keeps the JULES dump files (bool) (optional)
+    :param tmp_folder: Location of the temporary folder (str) (optional)
     :param overwrite_tmp_files: If True, overwrites any existing tmp files (bool) (optional)
     :param append_to_run_info: If True, appends to any existing run_info.csv file (bool) (optional)
     :return:
@@ -50,74 +53,24 @@ def iterate_variables(jules_executable_address,
         variable_namelist_files = [variable_namelist_files]
         variable_values = [variable_values]
 
-    # Make coppy of the master namelist to edit
-    tmp_folder = os.getcwd() + "/tmp/"
-    tmp_namelist = os.getcwd() + ("/tmp/namelist/")
-    Duplicate.duplicate(master_namelist_address, tmp_namelist, overwrite=overwrite_tmp_files)
+    tmp_folder, output_folder = setup_calibration_run_folders(master_namelist_address,
+                                                              output_folder,
+                                                              variable_names,
+                                                              tmp_folder = tmp_folder,
+                                                              overwrite_existing_folders = overwrite_tmp_files,
+                                                              use_existing_run_info = append_to_run_info,
+                                                              setup_dump_files = keep_dump_files)
 
-    # Create a temporary output folder
-    tmp_output = os.getcwd() + "/tmp/output/"
-    if(os.path.exists(tmp_output)):
-        if overwrite_tmp_files:
-            # Walk through the directory and delete all files
-            for root, dirs, files in os.walk(tmp_output, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(tmp_output)
-        else:
-            exception("ERROR: temporary output folder already exists.\n"
-                      + "Please delete the folder or set overwrite_tmp_files = True.\n")
-    os.mkdir(tmp_output)
-
-    # Create a list of the full file paths for the namelists to change
-    variable_namelist_files_full = [tmp_namelist + file for file in variable_namelist_files]
-
-    # Change the JULES output to a temporary folder
-    # Note we need to add ' to both ends of the output directory.
-    Edit_variable.edit_variable(tmp_namelist + "output.nml",
-                                "jules_output",
-                                "output_dir",
-                                "'" + tmp_output + "'")
-
-    # Check the actual output folder exists
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    variable_namelist_files_full = [tmp_folder + "namelist/" + file for file in variable_namelist_files]
 
     # Get the output profile name
-    profile_name = Read.read_variable(tmp_namelist + "output.nml",
+    profile_name = Read.read_variable(tmp_folder + "namelist/output.nml",
                                       "jules_output_profile",
                                       "profile_name")
 
     # Remove any quotes from the profile name
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
-
-    # Manage file to store run metadata
-    if os.path.exists(output_folder + "run_info.csv") and append_to_run_info:
-
-        # Check the file has the correct header
-        header = "run_id,run_date," + ",".join(variable_names) + "\n"
-
-        with open(output_folder + "run_info.csv", "r") as run_info:
-            if run_info.readline() != header:
-                exception("ERROR: run_info.csv file already exists but has the wrong header.")
-                return None
-
-        print("run_info.csv file already exists, appending data.")
-
-    elif os.path.exists(output_folder + "run_info.csv") and not append_to_run_info:
-        exception("ERROR: run_info.csv file already exists.\n"
-                  + "Please delete the file or set append_to_run_info = True.\n")
-    else:
-        print("Creating run_info.csv file")
-        with (open(output_folder + "run_info.csv", "w") as run_info):
-            # write header
-            header = "run_id,run_date"
-            header += "," + ",".join(variable_names)
-            header += "\n"
-            run_info.write(header)
 
     # Iterate over the values
     for i, values in enumerate(variable_values):
@@ -139,16 +92,16 @@ def iterate_variables(jules_executable_address,
 
 
 
-        Edit_variable.edit_variable(tmp_namelist + "output.nml",
+        Edit_variable.edit_variable(tmp_folder + "namelist/output.nml",
                                     "jules_output",
                                     "run_id",
                                     "'" + current_run_id + "'")
 
         # Run JULES
-        Run_JULES.run_JULES(jules_executable_address, tmp_namelist)
+        Run_JULES.run_JULES(jules_executable_address, tmp_folder + "namelist/")
 
         # Move the output from the temporary folder to the output folder
-        os.rename(tmp_output + current_run_id + "." + profile_name + ".nc",
+        os.rename(tmp_folder + "output/" + current_run_id + "." + profile_name + ".nc",
                   output_folder + current_run_id + "." + profile_name + ".nc")
 
         # If user wants to keep dump files, move them to the output folder
@@ -158,15 +111,15 @@ def iterate_variables(jules_executable_address,
             current_dump_folder = output_folder + "/" + current_run_id + "_dump/"
             os.mkdir(current_dump_folder)
 
-            output_files = os.listdir(tmp_output)
+            output_files = os.listdir(tmp_folder + "output/")
             for file in output_files:
                 if 'dump' in file:
-                    os.rename(tmp_output + file, current_dump_folder + file)
+                    os.rename(tmp_folder + "output/" + file, current_dump_folder + file)
 
         # Delete the temporary output folder contents
-        output_files = os.listdir(tmp_output)
+        output_files = os.listdir(tmp_folder + "output/")
         for file in output_files:
-            os.remove(tmp_output + file)
+            os.remove(tmp_folder + "output/" + file)
 
     # Remove tmp folder and contents
     for root, dirs, files in os.walk(tmp_folder, topdown=False):
@@ -190,6 +143,7 @@ def iterate_soil_variable(jules_executable_address,
                           output_folder,
                           run_id_prefix,
                           keep_dump_files = False,
+                          tmp_folder = None,
                           overwrite_tmp_files = False,
                           append_to_run_info = False):
 
@@ -218,9 +172,10 @@ def iterate_soil_variable(jules_executable_address,
         or none if no soil variable is to be changed (None)
     :param output_folder: JULES output folder (str)
     :param run_id_prefix: Prefix for all run ids (str)
-    :param keep_dump_files: save JULES dumpfiles (bool)
-    :param overwrite_tmp_files: overwrite any existing tmp files (bool)
-    :param append_to_run_info: append to any existing run_info.csv file (bool)
+    :param keep_dump_files: save JULES dumpfiles (bool) (optional)
+    :param tmp_folder: temporary folder to use (str) (optional)
+    :param overwrite_tmp_files: overwrite any existing tmp files (bool) (optional)
+    :param append_to_run_info: append to any existing run_info.csv file (bool) (optional)
     :return:
     """
 
@@ -257,85 +212,29 @@ def iterate_soil_variable(jules_executable_address,
         exception(f"ERROR: The number of iterations for the JULES variables ({len(variable_values)})"
                   + f" and soil variables ({len(soil_variable_values)}) must be the same.\n")
 
-    # Make a coppy of the master namelist to edit
-    tmp_folder = os.getcwd() + "/tmp/"
-    tmp_namelist = os.getcwd() + "/tmp/namelist/"
-    Duplicate.duplicate(master_namelist_address, tmp_namelist, overwrite=overwrite_tmp_files)
+    # Set up the temporary folders
+    tmp_folder, output_folder = setup_calibration_run_folders(master_namelist_address,
+                                                              output_folder,
+                                                              variable_names,
+                                                              tmp_folder = tmp_folder,
+                                                              overwrite_existing_folders = overwrite_tmp_files,
+                                                              use_existing_run_info = append_to_run_info,
+                                                              setup_dump_files = keep_dump_files)
 
     # Make a copy of the soil ancillary file
     tmp_soil_file = Duplicate.duplicate_soil_ancillary(soil_ancillary_address,
                                                        tmp_folder,
-                                                       tmp_namelist + "ancillaries.nml",
+                                                       tmp_folder + "namelist/ancillaries.nml",
                                                        overwrite=overwrite_tmp_files)
 
-    # Create a temporary output folder
-    tmp_output = os.getcwd() + "/tmp/output/"
-    if (os.path.exists(tmp_output)):
-        if overwrite_tmp_files:
-            # Walk through the directory and delete all files
-            for root, dirs, files in os.walk(tmp_output, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(tmp_output)
-        else:
-            exception("ERROR: temporary output folder already exists.\n"
-                      + "Please delete the folder or set overwrite_tmp_files = True.\n")
-    os.mkdir(tmp_output)
-
-    # Change the JULES output to a temporary folder
-    # Note we need to add ' to both ends of the output directory.
-    Edit_variable.edit_variable(tmp_namelist + "output.nml",
-                                "jules_output",
-                                "output_dir",
-                                "'" + tmp_output + "'")
-
-    # Make the actual output folder if it doesn't exist
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
     # Get the output profile name
-    profile_name = Read.read_variable(tmp_namelist + "output.nml",
+    profile_name = Read.read_variable(tmp_folder + "namelist/output.nml",
                                       "jules_output_profile",
                                       "profile_name")
 
     # Remove any quotes from the profile name
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
-
-    # Manage file to store run metadata
-    if os.path.exists(output_folder + "run_info.csv") and append_to_run_info:
-
-        # Check the file has the correct header
-        header = "run_id,run_date"
-        if len(variable_names) > 0:
-            header += "," + ",".join(variable_names)
-        if len(soil_variable_names) > 0:
-            header += "," + ",".join(soil_variable_names)
-        header += "\n"
-
-        with open(output_folder + "run_info.csv", "r") as run_info:
-            if run_info.readline() != header:
-                exception("ERROR: run_info.csv file already exists but has the wrong header.\n")
-                return None
-
-        print("run_info.csv file already exists, appending data.")
-
-    elif os.path.exists(output_folder + "run_info.csv") and not append_to_run_info:
-        exception("ERROR: run_info.csv file already exists.\n"
-                  + "Please delete the file or set append_to_run_info = True.\n")
-    else:
-        print("Creating run_info.csv file")
-        with (open(output_folder + "run_info.csv", "w") as run_info):
-            # write header
-            header = "run_id,run_date"
-            if len(variable_names) > 0:
-                header += "," + ",".join(variable_names)
-            if len(soil_variable_names) > 0:
-                header += "," + ",".join(soil_variable_names)
-            header += "\n"
-            run_info.write(header)
 
     # Set up variables to hold the current variable values
     current_JULES_variable_values = []
@@ -378,19 +277,19 @@ def iterate_soil_variable(jules_executable_address,
         Edit_variable.edit_soil_variable(tmp_soil_file,
                                          soil_variable_names,
                                          current_soil_variable_values,
-                                         tmp_namelist + "ancillaries.nml")
+                                         tmp_folder + "namelist/ancillaries.nml")
 
         # Edit the output file name
-        Edit_variable.edit_variable(tmp_namelist + "output.nml",
+        Edit_variable.edit_variable(tmp_folder + "namelist/output.nml",
                                     "jules_output",
                                     "run_id",
                                     "'" + current_run_id + "'")
 
         # Run JULES
-        Run_JULES.run_JULES(jules_executable_address, tmp_namelist)
+        Run_JULES.run_JULES(jules_executable_address, tmp_folder + "namelist/")
 
         # Move the output from the temporary folder to the output folder
-        os.rename(tmp_output + current_run_id + "." + profile_name + ".nc",
+        os.rename(tmp_folder + "output/" + current_run_id + "." + profile_name + ".nc",
                   output_folder + current_run_id + "." + profile_name + ".nc")
 
         # If user wants to keep dump files, move them to the output folder
@@ -400,15 +299,15 @@ def iterate_soil_variable(jules_executable_address,
             current_dump_folder = output_folder + "/" + current_run_id + "_dump/"
             os.mkdir(current_dump_folder)
 
-            output_files = os.listdir(tmp_output)
+            output_files = os.listdir(tmp_folder + "output/")
             for file in output_files:
                 if 'dump' in file:
-                    os.rename(tmp_output + file, current_dump_folder + file)
+                    os.rename(tmp_folder + "output/" + file, current_dump_folder + file)
 
         # Delete the temporary output folder contents
-        output_files = os.listdir(tmp_output)
+        output_files = os.listdir(tmp_folder + "output/")
         for file in output_files:
-            os.remove(tmp_output + file)
+            os.remove(tmp_folder + "output/" + file)
 
     # Remove tmp folder and contents
     for root, dirs, files in os.walk(tmp_folder, topdown=False):
