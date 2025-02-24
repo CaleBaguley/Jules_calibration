@@ -9,9 +9,10 @@ from src.Namelist_management.Outpur_nml_management import is_in_output
 from src.Namelist_management.Edit_variable import edit_variable
 
 from xarray import open_dataset
-from pandas import read_csv
+from pandas import read_csv, merge
 from logging import exception
 from copy import copy
+from sklearn.metrics import mean_squared_error
 
 
 def optimise_variable(jules_executable_address,
@@ -25,6 +26,7 @@ def optimise_variable(jules_executable_address,
                       run_id_prefix,
                       variable_initial_values = None,
                       variable_limits = None,
+                      obs_variable_weights = None,
                       output_folder = None,
                       keep_dump_files = False,
                       tmp_folder = None,
@@ -139,3 +141,61 @@ def optimise_variable(jules_executable_address,
     # -- Optimisation --------------------------------------------------------------------------
 
 
+def compare_to_obs(obs_data,
+                   JULES_output,
+                   obs_variable_keys,
+                   jules_out_variable_keys,
+                   time_period = None,
+                   obs_variable_weights = None,
+                   rmse_out_address = None):
+    """
+    Compares the JULES output to the observational data
+    :param obs_data: pandas dataframe of the observational data
+    :param JULES_output: pandas dataframe of the JULES output
+    :param obs_variable_keys: Keys of the variables in the observation data file used to assess model
+                              (str or list of str)
+    :param jules_out_variable_keys: Keys of the variables in the JULES output file used to assess model
+                                    (srt or list of str)
+    :param time_period: Period to compare the data over (pandas datetime) (optional)
+    :param obs_variable_weights: Weights to apply to the variables in the observation data (list of float) (optional)
+    :param rmse_out_address: Address to save the RMSE outputs (str) (optional)
+    :return:
+    """
+
+    # Merge the dataframes on the time index
+    merged_data = merge(obs_data, JULES_output, how = 'inner', left_index=True, right_index=True)
+
+    if len(merged_data) == 0:
+        exception("ERROR: Observation and JULES output don't match.")
+        exit()
+
+    # Reduce the data to the time period
+    if time_period is not None:
+        merged_data = merged_data[time_period[0]:time_period[1]]
+
+    if(obs_variable_weights is None):
+        obs_variable_weights = [1] * len(obs_variable_keys)
+
+    # Normalise the weights
+    total_weight = sum(obs_variable_weights)
+    obs_variable_weights = [w / total_weight for w in obs_variable_weights]
+
+    # Calculate the RMSE for each variable
+    rmse_values = []
+    mean_rmse = 0
+    for i, obs_key in enumerate(obs_variable_keys):
+        jules_key = jules_out_variable_keys[i]
+
+        # Calculate the rmse
+        rmse_values.append(mean_squared_error(merged_data[obs_key],
+                                              merged_data[jules_key],
+                                              squared=False))
+
+        mean_rmse += rmse_values[i] * obs_variable_weights[i]
+
+    # Save the RMSE values to the end of the output file
+    if rmse_out_address is not None:
+        with open(rmse_out_address, "w") as file:
+            file.write(", ".join(obs_variable_keys) + f", {mean_rmse}")
+
+    return mean_rmse
