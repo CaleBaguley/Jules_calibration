@@ -7,13 +7,14 @@ from src.general.file_management import make_folder
 Contains code used to duplicate the contents of a folder containing namelist files
 """
 
-def duplicate(namelist_folder, duplicate_address, overwrite=False):
+def duplicate(namelist_folder, duplicate_address, overwrite=False, verbose=False):
     """
     Creates a coppy of the namelist files in the duplicate_address.
     NOTE: Only copies files ending in nml.
     :param namelist_folder: Namelist to copy (str)
     :param duplicate_address: Address to copy the namelists to (str)
     :param overwrite = False: If True, overwrites the files in the duplicate_address (bool)
+    :param verbose = False: If True, prints the files being copied (bool)
     :return: True if the files were copied, False otherwise
     """
 
@@ -21,10 +22,12 @@ def duplicate(namelist_folder, duplicate_address, overwrite=False):
     make_folder(duplicate_address, overwrite)
 
     # Copy files
-    print("Copying files...")
+    if verbose:
+        print("Copying files...")
     for file in os.listdir(namelist_folder):
         if file.endswith(".nml"):
-            print("Copying file: ", file)
+            if verbose:
+                print("Copying file: ", file)
 
             duplicate_file(namelist_folder + file,
                            duplicate_address,
@@ -32,7 +35,7 @@ def duplicate(namelist_folder, duplicate_address, overwrite=False):
 
     return True
 
-def duplicate_file(file_address, duplicate_address, overwrite=False):
+def duplicate_file(file_address, duplicate_address, overwrite=False, verbose=False):
     """
     Creates a copy of the file in the duplicate_address.
     :param file_address: File to copy (str)
@@ -42,7 +45,8 @@ def duplicate_file(file_address, duplicate_address, overwrite=False):
     """
 
     if not os.path.exists(duplicate_address):
-        print("Creating directory: ", duplicate_address)
+        if verbose:
+            print("Creating directory: ", duplicate_address)
         os.makedirs(duplicate_address)
 
     if not overwrite:
