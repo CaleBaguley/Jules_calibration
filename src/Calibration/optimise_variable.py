@@ -233,6 +233,7 @@ def calc_rmse_for_given_values(variable_values,
         rmse_out_address = output_folder + "run_info.csv"
 
     # Set the variable values in the namelist files
+    # TODO: fix this hard coded 5
     variable_values_string = [f"5*{val}" for val in variable_values]
     edit_variable(variable_namelist_files,
                   variable_namelists,
