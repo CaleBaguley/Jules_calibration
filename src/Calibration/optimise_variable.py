@@ -1,18 +1,23 @@
 """
 Code to optimise a variable in a namelist file using observational data
 """
+import pandas as pd
 
 from src.Calibration.setup_calibration_files import setup_tmp_folders
-from src.general.file_management import make_folder
+from src.general.file_management import make_folder, delete_folder
 from src.Namelist_management.Read import read_variable
 from src.Namelist_management.Outpur_nml_management import is_in_output
 from src.Namelist_management.Edit_variable import edit_variable
+from src.Run_JULES.Run_JULES import run_JULES
 
 from xarray import open_dataset
 from pandas import read_csv, merge
 from logging import exception
 from copy import copy
 from sklearn.metrics import mean_squared_error
+from scipy.optimize import minimize
+import os
+from datetime import datetime
 
 
 def optimise_variable(jules_executable_address,
@@ -20,18 +25,23 @@ def optimise_variable(jules_executable_address,
                       variable_names,
                       variable_namelists,
                       variable_namelist_files,
-                      observation_data_address,
-                      obs_variable_keys,
+                      observation_data,
+                      observational_variable_keys,
                       jules_out_variable_keys,
                       run_id_prefix,
+                      max_iter = 100,
                       variable_initial_values = None,
-                      variable_limits = None,
+                      variable_bounds = None,
                       obs_variable_weights = None,
                       output_folder = None,
                       keep_dump_files = False,
                       tmp_folder = None,
                       overwrite_tmp_files = False,
-                      append_to_run_info = False):
+                      overwrite_output_files = False,
+                      append_to_run_info = False,
+                      save_rmse = False,
+                      save_run_time = False,
+                      minimize_method = "Nelder-Mead"):
 
     """
     Optimises a variable in a namelist file using observational data
@@ -43,8 +53,8 @@ def optimise_variable(jules_executable_address,
     :param variable_namelist_files: Name of the namelist file to optimise the variable in (str)
                                     or list of namelist files to optimise the variable in (list of str)
     :param observation_data_address: Address of the observation data file (str)
-    :param obs_variable_keys: Keys of the variables in the observation data file used to assess model
-                              (str or list of str)
+    :param observational_variable_keys: Keys of the variables in the observation data file used to assess model
+                                        (str or list of str)
     :param jules_out_variable_keys: Keys of the variables in the JULES output file used to assess model
                                     (srt or list of str)
     :param run_id_prefix: Prefix to add to the run id (str)
@@ -69,13 +79,13 @@ def optimise_variable(jules_executable_address,
         exception("ERROR: variable_names, variable_namelists and variable_namelist_files must be the same length.")
 
     # Manage the case where the user only wants to iterate over one observation variable and JULES output variable
-    if(type(obs_variable_keys) is str):
-        obs_variable_keys = [obs_variable_keys]
+    if(type(observational_variable_keys) is str):
+        observational_variable_keys = [observational_variable_keys]
     if(type(jules_out_variable_keys) is str):
         jules_out_variable_keys = [jules_out_variable_keys]
 
     # Check the observation variables and JULES output variables are the same length
-    if len(obs_variable_keys) != len(jules_out_variable_keys):
+    if len(observational_variable_keys) != len(jules_out_variable_keys):
         exception("ERROR: obs_variable_keys and jules_out_variable_keys must be the same length.")
 
     # Set up the temporary folders
@@ -101,16 +111,38 @@ def optimise_variable(jules_executable_address,
                                                          variable_namelists[i],
                                                          variable_names[i]))
 
+            # convert to float
+            if('*' in variable_initial_values[-1]):
+                variable_initial_values[-1] = float(variable_initial_values[-1].split('*')[1])
+            else:
+                variable_initial_values[-1] = float(variable_initial_values[-1].split(",")[0])
+
     print(f"Initial values:")
     for i, name in enumerate(variable_names):
         print(f"{name} = {variable_initial_values[i]}")
 
-    # Set up variable to hold the current values when iterating
-    current_variable_values = copy(variable_initial_values)
-
     # Setup output folder
     if output_folder is not None:
-        output_folder = make_folder(output_folder, overwrite_existing=False)
+        output_folder = make_folder(output_folder, overwrite_existing=overwrite_output_files)
+
+    # Create the run_info.csv file
+    if not append_to_run_info:
+        if(os.path.isfile(output_folder + "run_info.csv")):
+            os.remove(output_folder + "run_info.csv")
+
+        with open(output_folder + "run_info.csv", "w") as run_info:
+            run_info.write("run_id, run_date, " + ", ".join(variable_names))
+
+            if save_rmse:
+                if len(observational_variable_keys) > 1:
+                    for key in observational_variable_keys:
+                        run_info.write(", " + key)
+                run_info.write(", rmse")
+            if save_run_time:
+                run_info.write(", run_time")
+
+            run_info.write("\n")
+
 
     # Get the output profile name
     profile_name = read_variable(tmp_folder + "namelist/output.nml",
@@ -121,9 +153,15 @@ def optimise_variable(jules_executable_address,
     profile_name = profile_name.strip("'")
     profile_name = profile_name.strip('"')
 
+    # Change the output directory in the namelist file
+    edit_variable(tmp_folder + "namelist/output.nml",
+                  "jules_output",
+                  "output_dir",
+                  "'" + tmp_folder + "output/" + "'")
+
     # setup variable keys
-    if type(obs_variable_keys) is str:
-        obs_variable_keys = [obs_variable_keys]
+    if type(observational_variable_keys) is str:
+        obs_variable_keys = [observational_variable_keys]
 
     if type(jules_out_variable_keys) is str:
         jules_out_variable_keys = [jules_out_variable_keys]
@@ -135,10 +173,129 @@ def optimise_variable(jules_executable_address,
                   + ") are not in the output namelist.")
 
     # Read in observation data and reduce to the required variables
-    obs_data = read_csv(observation_data_address)
-    obs_data = obs_data[obs_variable_keys]
+    observation_data = observation_data[observational_variable_keys]
 
     # -- Optimisation --------------------------------------------------------------------------
+    print("Optimising variables...")
+    current_run_id = run_id_prefix + "_0"
+    minimize(calc_rmse_for_given_values,
+             x0 = variable_initial_values,
+             args = (variable_names,
+                     variable_namelists,
+                     variable_namelist_files_full,
+                     tmp_folder,
+                     jules_executable_address,
+                     output_folder,
+                     [current_run_id],
+                     profile_name,
+                     observation_data,
+                     observational_variable_keys,
+                     jules_out_variable_keys,
+                     save_rmse,
+                     save_run_time,
+                     obs_variable_weights),
+             bounds = variable_bounds,
+             method = minimize_method,
+             options= {"max_iter": max_iter}
+             )
+    print("Optimisation complete.")
+    # -- Clean up ------------------------------------------------------------------------------
+    # Remove the temporary folders
+    delete_folder(tmp_folder)
+
+def calc_rmse_for_given_values(variable_values,
+                               variable_names,
+                               variable_namelists,
+                               variable_namelist_files,
+                               tmp_folder,
+                               jules_executable_address,
+                               output_folder,
+                               current_run_id,
+                               profile_name,
+                               observational_data,
+                               observational_variable_keys,
+                               jules_out_variable_keys,
+                               save_rmse = False,
+                               save_run_time = False,
+                               obs_variable_weights = None):
+    """
+    Function used in minimisation to calculate the RMSE for a given set of variable values
+    :param variable_values:
+    :return:
+    """
+
+    current_run_id[0] = "_".join(current_run_id[0].split("_")[:-1]) + "_" + str(int(current_run_id[0].split("_")[-1]) + 1)
+
+    print(f"Setup {current_run_id[0]}...")
+
+    rmse_out_address = None
+    if save_rmse and output_folder is not None:
+        rmse_out_address = output_folder + "run_info.csv"
+
+    # Set the variable values in the namelist files
+    variable_values_string = [f"5*{val}" for val in variable_values]
+    edit_variable(variable_namelist_files,
+                  variable_namelists,
+                  variable_names,
+                  variable_values_string)
+
+    # Write the run info to the run_info.csv file
+    if output_folder is not None:
+        with open(output_folder + "run_info.csv", "a") as run_info:
+            run_info.write(current_run_id[0] + "." + profile_name + ".nc,"
+                           + f"{datetime.now():%Y-%m-%d %H:%M},"
+                           + ",".join([str(val) for val in variable_values]))
+
+            run_info.close()
+
+    # Update the run id
+
+    edit_variable(tmp_folder + "namelist/output.nml",
+                  'jules_output',
+                  'run_id',
+                  "'" + current_run_id[0] + "'")
+
+    # Run JULES
+    print(f"Running {current_run_id[0]}...")
+    run_time = datetime.now()
+    run_JULES(jules_executable_address,
+              tmp_folder + "namelist/",
+              terminal_output_address = tmp_folder + "output/" + current_run_id[0] + "." + profile_name + ".out")
+    run_time = datetime.now() - run_time
+
+    # calculate RMSE
+    print(f"Cacluate RMSE for {current_run_id[0]}...")
+    JULES_data = open_dataset(tmp_folder + "output/" + current_run_id[0] + "." + profile_name + ".nc")
+    JULES_data = JULES_data[['time'] + jules_out_variable_keys]
+    JULES_data = JULES_data.squeeze(dim=["x", "y"], drop=True)
+    JULES_data = JULES_data.to_pandas()
+    JULES_data.index = pd.to_datetime(JULES_data.index)
+
+    rmse = compare_to_obs(observational_data,
+                          JULES_data,
+                          observational_variable_keys,
+                          jules_out_variable_keys,
+                          obs_variable_weights = obs_variable_weights,
+                          rmse_out_address = rmse_out_address)
+
+    print(f"Cleening up {current_run_id[0]}...")
+    # Save run time
+    if save_run_time and output_folder is not None:
+        with open(output_folder + "run_info.csv", "a") as run_info:
+            run_info.write(f",{run_time.total_seconds()}")
+            run_info.close()
+
+    # End run entry in run_info.csv
+    if output_folder is not None:
+        with open(output_folder + "run_info.csv", "a") as run_info:
+            run_info.write("\n")
+            run_info.close()
+
+    # clean tmp_output
+    for file in os.listdir(tmp_folder + "output/"):
+        os.remove(tmp_folder + "output/" + file)
+
+    return rmse
 
 
 def compare_to_obs(obs_data,
@@ -167,6 +324,10 @@ def compare_to_obs(obs_data,
 
     if len(merged_data) == 0:
         exception("ERROR: Observation and JULES output don't match.")
+        print("Observation data:")
+        print(obs_data)
+        print("JULES output:")
+        print(JULES_output)
         exit()
 
     # Reduce the data to the time period
@@ -188,14 +349,17 @@ def compare_to_obs(obs_data,
 
         # Calculate the rmse
         rmse_values.append(mean_squared_error(merged_data[obs_key],
-                                              merged_data[jules_key],
-                                              squared=False))
+                                              merged_data[jules_key]))
 
         mean_rmse += rmse_values[i] * obs_variable_weights[i]
 
     # Save the RMSE values to the end of the output file
     if rmse_out_address is not None:
-        with open(rmse_out_address, "w") as file:
-            file.write(", ".join(obs_variable_keys) + f", {mean_rmse}")
+        with open(rmse_out_address, "a") as file:
+            if len(obs_variable_keys) > 1:
+                file.write(", ".join(obs_variable_keys))
+
+            file.write(f", {mean_rmse}")
+            file.close()
 
     return mean_rmse
