@@ -11,9 +11,8 @@ from src.Namelist_management.Edit_variable import edit_variable
 from src.Run_JULES.Run_JULES import run_JULES
 
 from xarray import open_dataset
-from pandas import read_csv, merge
+from pandas import merge
 from logging import exception
-from copy import copy
 from sklearn.metrics import mean_squared_error
 from scipy.optimize import minimize
 import os
@@ -127,10 +126,10 @@ def optimise_variable(jules_executable_address,
 
     # Create the run_info.csv file
     if not append_to_run_info:
-        if(os.path.isfile(output_folder + "run_info.csv")):
-            os.remove(output_folder + "run_info.csv")
+        if(os.path.isfile(output_folder + run_id_prefix + "run_info.csv")):
+            os.remove(output_folder + run_id_prefix + "run_info.csv")
 
-        with open(output_folder + "run_info.csv", "w") as run_info:
+        with open(output_folder + run_id_prefix + "run_info.csv", "w") as run_info:
             run_info.write("run_id, run_date, " + ", ".join(variable_names))
 
             if save_rmse:
@@ -161,7 +160,7 @@ def optimise_variable(jules_executable_address,
 
     # setup variable keys
     if type(observational_variable_keys) is str:
-        obs_variable_keys = [observational_variable_keys]
+        observational_variable_keys = [observational_variable_keys]
 
     if type(jules_out_variable_keys) is str:
         jules_out_variable_keys = [jules_out_variable_keys]
@@ -192,6 +191,7 @@ def optimise_variable(jules_executable_address,
                      observational_variable_keys,
                      jules_out_variable_keys,
                      save_rmse,
+                     output_folder + run_id_prefix + "rmse.csv",
                      save_run_time,
                      obs_variable_weights),
              bounds = variable_bounds,
@@ -215,6 +215,7 @@ def calc_rmse_for_given_values(variable_values,
                                observational_data,
                                observational_variable_keys,
                                jules_out_variable_keys,
+                               run_info_out_address,
                                save_rmse = False,
                                save_run_time = False,
                                obs_variable_weights = None):
@@ -228,9 +229,11 @@ def calc_rmse_for_given_values(variable_values,
 
     print(f"Setup {current_run_id[0]}...")
 
-    rmse_out_address = None
-    if save_rmse and output_folder is not None:
-        rmse_out_address = output_folder + "run_info.csv"
+    # Setup rmse output if needed
+    if save_rmse:
+        rmse_out_address = run_info_out_address
+    else:
+        rmse_out_address = None
 
     # Set the variable values in the namelist files
     # TODO: fix this hard coded 5
@@ -242,7 +245,7 @@ def calc_rmse_for_given_values(variable_values,
 
     # Write the run info to the run_info.csv file
     if output_folder is not None:
-        with open(output_folder + "run_info.csv", "a") as run_info:
+        with open(run_info_out_address, "a") as run_info:
             run_info.write(current_run_id[0] + "." + profile_name + ".nc,"
                            + f"{datetime.now():%Y-%m-%d %H:%M},"
                            + ",".join([str(val) for val in variable_values]))
@@ -282,13 +285,13 @@ def calc_rmse_for_given_values(variable_values,
     print(f"Cleening up {current_run_id[0]}...")
     # Save run time
     if save_run_time and output_folder is not None:
-        with open(output_folder + "run_info.csv", "a") as run_info:
+        with open(run_info_out_address, "a") as run_info:
             run_info.write(f",{run_time.total_seconds()}")
             run_info.close()
 
     # End run entry in run_info.csv
     if output_folder is not None:
-        with open(output_folder + "run_info.csv", "a") as run_info:
+        with open(run_info_out_address, "a") as run_info:
             run_info.write("\n")
             run_info.close()
 
