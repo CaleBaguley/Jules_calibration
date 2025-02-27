@@ -5,12 +5,12 @@ import os
 import datetime
 from logging import exception
 
-import src.Namelist_management.Duplicate as Duplicate
-import src.Run_JULES.Run_JULES as Run_JULES
-import src.Namelist_management.Edit_variable as Edit_variable
-import src.Namelist_management.Read as Read
-from src.general.file_management import make_folder
-from src.Calibration.setup_calibration_files import setup_calibration_run_folders
+import Calibration.Namelist_management.Duplicate as Duplicate
+import Calibration.Run_JULES.Run_JULES as Run_JULES
+import Calibration.Namelist_management.Edit_variable as Edit_variable
+import Calibration.Namelist_management.Read as Read
+from Calibration.general.file_management import make_folder
+from Calibration.Calibration.setup_calibration_files import setup_calibration_run_folders
 
 def iterate_variables(jules_executable_address,
                       master_namelist_address,

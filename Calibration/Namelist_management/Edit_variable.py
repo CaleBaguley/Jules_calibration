@@ -1,4 +1,4 @@
-import src.Namelist_management.Read as Read
+import Calibration.Namelist_management.Read as Read
 """
 Code to open a namelist file and edit a single input variable
 """

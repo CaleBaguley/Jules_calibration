@@ -1,7 +1,7 @@
 import os
 
-from src.Namelist_management import Edit_variable as Edit_variable
-from src.general.file_management import make_folder
+from Calibration.Namelist_management import Edit_variable as Edit_variable
+from Calibration.general.file_management import make_folder
 
 """
 Contains code used to duplicate the contents of a folder containing namelist files

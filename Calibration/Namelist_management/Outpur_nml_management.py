@@ -2,7 +2,7 @@
 Contains functions used to manage the output namelist files
 """
 
-from src.Namelist_management.Read import read_file
+from Calibration.Namelist_management.Read import read_file
 from logging import exception
 
 def is_in_output(variable, output_namelist_file):

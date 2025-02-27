@@ -2,13 +2,13 @@
 
 from setuptools import setup
 
-packages = ['src',
-            'src.Calibration',
-            'src.general',
-            'src.Namelist_management',
-            'src.Run_JULES']
+packages = ['Calibration',
+            'Calibration.Calibration',
+            'Calibration.general',
+            'Calibration.Namelist_management',
+            'Calibration.Run_JULES']
 
-setup(name='JULES_Namelist_management',
+setup(name='Calibration',
       version='0.1',
       description='A package for calibrating JULES namelist variables',
       author='Cale Baguley',
