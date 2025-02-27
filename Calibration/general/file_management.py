@@ -15,6 +15,8 @@ def make_folder(new_folder,
     :return: new_folder address (str)
     """
 
+    print(f"{new_folder} exists: {os.path.exists(new_folder)}")
+
     if(os.path.exists(new_folder)):
         if overwrite_existing:
             # Walk through the directory and delete all files
@@ -27,6 +29,8 @@ def make_folder(new_folder,
         else:
             exception(f"ERROR: {new_folder} folder already exists.\n"
                       + "Please delete the folder or set overwrite_tmp_files = True.\n")
+            exit()
+
     os.mkdir(new_folder)
 
     return new_folder
