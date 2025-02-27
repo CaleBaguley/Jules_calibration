@@ -3,12 +3,12 @@ Code to optimise a variable in a namelist file using observational data
 """
 import pandas as pd
 
-from src.Calibration.setup_calibration_files import setup_tmp_folders
-from src.general.file_management import make_folder, delete_folder
-from src.Namelist_management.Read import read_variable
-from src.Namelist_management.Outpur_nml_management import is_in_output
-from src.Namelist_management.Edit_variable import edit_variable
-from src.Run_JULES.Run_JULES import run_JULES
+from Calibration.Calibration.setup_calibration_files import setup_tmp_folders
+from Calibration.general.file_management import make_folder, delete_folder
+from Calibration.Namelist_management.Read import read_variable
+from Calibration.Namelist_management.Outpur_nml_management import is_in_output
+from Calibration.Namelist_management.Edit_variable import edit_variable
+from Calibration.Run_JULES.Run_JULES import run_JULES
 
 from xarray import open_dataset
 from pandas import merge
@@ -40,7 +40,8 @@ def optimise_variable(jules_executable_address,
                       append_to_run_info = False,
                       save_rmse = False,
                       save_run_time = False,
-                      minimize_method = "Nelder-Mead"):
+                      minimize_method = "Nelder-Mead",
+                      verbose = False):
 
     """
     Optimises a variable in a namelist file using observational data
@@ -67,6 +68,9 @@ def optimise_variable(jules_executable_address,
 
     # -- Setup ---------------------------------------------------------------------------------
 
+    if verbose:
+        print("Setting up runs...")
+
     # Manage the case where the user only wants to iterate over one variable
     if type(variable_names) is str:
         variable_names = [variable_names]
@@ -88,6 +92,7 @@ def optimise_variable(jules_executable_address,
         exception("ERROR: obs_variable_keys and jules_out_variable_keys must be the same length.")
 
     # Set up the temporary folders
+    print("Setting up temp folder")
     tmp_folder = setup_tmp_folders(master_namelist_address,
                                    tmp_folder,
                                    overwrite_tmp_files)
@@ -125,11 +130,12 @@ def optimise_variable(jules_executable_address,
         output_folder = make_folder(output_folder, overwrite_existing=overwrite_output_files)
 
     # Create the run_info.csv file
+    run_info_address = output_folder + run_id_prefix + "_run_info.csv"
     if not append_to_run_info:
-        if(os.path.isfile(output_folder + run_id_prefix + "run_info.csv")):
-            os.remove(output_folder + run_id_prefix + "run_info.csv")
+        if(os.path.isfile(run_info_address)):
+            os.remove(run_info_address)
 
-        with open(output_folder + run_id_prefix + "run_info.csv", "w") as run_info:
+        with open(run_info_address, "w") as run_info:
             run_info.write("run_id, run_date, " + ", ".join(variable_names))
 
             if save_rmse:
@@ -175,7 +181,8 @@ def optimise_variable(jules_executable_address,
     observation_data = observation_data[observational_variable_keys]
 
     # -- Optimisation --------------------------------------------------------------------------
-    print("Optimising variables...")
+    if verbose:
+        print("Optimising variables...")
     current_run_id = run_id_prefix + "_0"
     minimize(calc_rmse_for_given_values,
              x0 = variable_initial_values,
@@ -190,15 +197,18 @@ def optimise_variable(jules_executable_address,
                      observation_data,
                      observational_variable_keys,
                      jules_out_variable_keys,
+                     run_info_address,
                      save_rmse,
-                     output_folder + run_id_prefix + "rmse.csv",
                      save_run_time,
-                     obs_variable_weights),
+                     obs_variable_weights,
+                     verbose),
              bounds = variable_bounds,
              method = minimize_method,
              options= {"max_iter": max_iter}
              )
-    print("Optimisation complete.")
+
+    if verbose:
+        print("Optimisation complete.")
     # -- Clean up ------------------------------------------------------------------------------
     # Remove the temporary folders
     delete_folder(tmp_folder)
@@ -218,7 +228,8 @@ def calc_rmse_for_given_values(variable_values,
                                run_info_out_address,
                                save_rmse = False,
                                save_run_time = False,
-                               obs_variable_weights = None):
+                               obs_variable_weights = None,
+                               verbose = False):
     """
     Function used in minimisation to calculate the RMSE for a given set of variable values
     :param variable_values:
@@ -227,7 +238,8 @@ def calc_rmse_for_given_values(variable_values,
 
     current_run_id[0] = "_".join(current_run_id[0].split("_")[:-1]) + "_" + str(int(current_run_id[0].split("_")[-1]) + 1)
 
-    print(f"Setup {current_run_id[0]}...")
+    if verbose:
+        print(f"Setup {current_run_id[0]}...")
 
     # Setup rmse output if needed
     if save_rmse:
@@ -260,7 +272,8 @@ def calc_rmse_for_given_values(variable_values,
                   "'" + current_run_id[0] + "'")
 
     # Run JULES
-    print(f"Running {current_run_id[0]}...")
+    if verbose:
+        print(f"Running {current_run_id[0]}...")
     run_time = datetime.now()
     run_JULES(jules_executable_address,
               tmp_folder + "namelist/",
@@ -268,7 +281,8 @@ def calc_rmse_for_given_values(variable_values,
     run_time = datetime.now() - run_time
 
     # calculate RMSE
-    print(f"Cacluate RMSE for {current_run_id[0]}...")
+    if verbose:
+        print(f"Cacluate RMSE for {current_run_id[0]}...")
     JULES_data = open_dataset(tmp_folder + "output/" + current_run_id[0] + "." + profile_name + ".nc")
     JULES_data = JULES_data[['time'] + jules_out_variable_keys]
     JULES_data = JULES_data.squeeze(dim=["x", "y"], drop=True)
@@ -280,9 +294,11 @@ def calc_rmse_for_given_values(variable_values,
                           observational_variable_keys,
                           jules_out_variable_keys,
                           obs_variable_weights = obs_variable_weights,
-                          rmse_out_address = rmse_out_address)
+                          rmse_out_address = rmse_out_address,
+                          verbose = verbose)
 
-    print(f"Cleening up {current_run_id[0]}...")
+    if verbose:
+        print(f"Cleening up {current_run_id[0]}...")
     # Save run time
     if save_run_time and output_folder is not None:
         with open(run_info_out_address, "a") as run_info:
@@ -308,7 +324,8 @@ def compare_to_obs(obs_data,
                    jules_out_variable_keys,
                    time_period = None,
                    obs_variable_weights = None,
-                   rmse_out_address = None):
+                   rmse_out_address = None,
+                   verbose = False):
     """
     Compares the JULES output to the observational data
     :param obs_data: pandas dataframe of the observational data
@@ -359,6 +376,8 @@ def compare_to_obs(obs_data,
 
     # Save the RMSE values to the end of the output file
     if rmse_out_address is not None:
+        if verbose:
+            print(f"Saving RMSE values to {rmse_out_address}...")
         with open(rmse_out_address, "a") as file:
             if len(obs_variable_keys) > 1:
                 file.write(", ".join(obs_variable_keys))
