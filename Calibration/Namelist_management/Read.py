@@ -68,7 +68,6 @@ def read_variable(file_address, namelist, variable):
     namelist_lines = read_namelist(file_address, namelist)
 
     for i, line in enumerate(namelist_lines):
-        print(line)
         # the firs entry in the line is the variable name
         if variable in line[:len(variable)]:
             # the value is the part of the line after the "=" sign
