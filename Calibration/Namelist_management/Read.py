@@ -68,6 +68,7 @@ def read_variable(file_address, namelist, variable):
     namelist_lines = read_namelist(file_address, namelist)
 
     for i, line in enumerate(namelist_lines):
+        print(line)
         # the firs entry in the line is the variable name
         if variable in line[:len(variable)]:
             # the value is the part of the line after the "=" sign
@@ -84,6 +85,12 @@ def read_variable(file_address, namelist, variable):
                         return value[:-1]
                     # The last line doesn't have a comma at the end
                     return value
+
+            # Return the value without the comma at the end
+            if (value[-1] == ','):
+                return value[:-1]
+            # The last line doesn't have a comma at the end
+            return value
 
     print("Variable not found.")
     return None
